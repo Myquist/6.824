@@ -24,6 +24,7 @@ type RequestWorkReply struct {
 	Type string
 	Id   int
 	NReduce int
+	UUID string
 }
 
 // Add your RPC definitions here.

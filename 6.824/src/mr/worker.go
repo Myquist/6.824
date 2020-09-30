@@ -75,7 +75,7 @@ func Worker(mapf func(string, string) []KeyValue,
 		} else if workType == "None" {
 			break
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(1)
 	}
 
 }
@@ -106,15 +106,31 @@ func DoMap(reply RequestWorkReply, mapf func(string, string) []KeyValue) {
 	text := string(content)
 	resultString := mapf(reply.File, text)
 	sort.Sort(ByKey(resultString))
-	output := ""
+	//output := ""
+	realOutput := ""
+	fakeOutput := ""
+	prevFake := ""
+	prevReal := ""
 	var f *os.File
 	for index, value := range resultString {
-		output = "mr-" + strconv.Itoa(reply.Id) + "-" + strconv.Itoa(ihash(value.Key) % reply.NReduce)
-		if !fileExists(output) {
+		//if value.Key == "a" {
+		//	println("a")
+		//}
+		realOutput = "mr-" + strconv.Itoa(reply.Id) + "-" + strconv.Itoa(ihash(value.Key) % reply.NReduce)
+		fakeOutput = reply.UUID + strconv.Itoa(reply.Id) + "-" + strconv.Itoa(ihash(value.Key) % reply.NReduce)
+		if !fileExists(fakeOutput) {
 			if index != 0 {
 				f.Close()
+				err := os.Rename(prevFake, prevReal)
+				if err != nil {
+					println("rename error in doMap:")
+					log.Fatal(err)
+				}
 			}
-			f, err = os.Create(output)
+			f, err = os.Create(fakeOutput)
+			prevFake = fakeOutput
+			prevReal = realOutput
+			//f, err = os.Create(realOutput)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -133,18 +149,20 @@ func DoMap(reply RequestWorkReply, mapf func(string, string) []KeyValue) {
 		}
 	}
 	f.Close()
+	renameErr := os.Rename(fakeOutput, realOutput)
+	if renameErr != nil {
+		println("rename error in doMap:")
+		log.Fatal(err)
+	}
 }
 
 func DoReduce(reply RequestWorkReply, reducef func(string, []string) string) {
 	output := "mr-out-" + reply.File
-	if fileExists(output) {
-		os.Remove(output)
-	}
-	outFile, err := os.Create(output)
+
+	outFile, err := os.Create(reply.UUID)
 	if err != nil {
 		println(err)
 	}
-	defer outFile.Close()
 
 	readList := readMap(reply.File)
 	//fmt.Printf("%v", result)
@@ -171,7 +189,7 @@ func DoReduce(reply RequestWorkReply, reducef func(string, []string) string) {
 		for j < len(kva) && kva[j].Key == kva[i].Key {
 			j++
 		}
-		values := []string{}
+		var values []string
 		for k := i; k < j; k++ {
 			values = append(values, kva[k].Value)
 		}
@@ -181,6 +199,15 @@ func DoReduce(reply RequestWorkReply, reducef func(string, []string) string) {
 		fmt.Fprintf(outFile, "%v %v\n", kva[i].Key, output)
 
 		i = j
+	}
+	outFile.Close()
+	if fileExists(output) {
+		os.Remove(output)
+	}
+	renameErr := os.Rename(reply.UUID, output)
+	if renameErr != nil {
+		println("Rename error:")
+		log.Fatal(renameErr)
 	}
 }
 

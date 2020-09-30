@@ -1,6 +1,8 @@
 package mr
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"strconv"
@@ -21,7 +23,9 @@ type Master struct {
 	reduceJob   []string
 	reducePending []string
 	nReduce     int
+	flag        bool
 	mutex sync.Mutex
+	set map[string]bool
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -52,11 +56,13 @@ func (m *Master) AssignWork(args *RequestWorkArgs, reply *RequestWorkReply) erro
 		m.mapJob = RemoveIndex(m.mapJob, 0)
 		m.mapPending = append(m.mapPending, reply.File)
 		reply.Id = indexOf(reply.File, m.files)
+		reply.UUID = m.generateUUID()
 	} else if reply.Type == "Reduce" {
 		reply.File = m.reduceJob[0]
 		m.reduceJob = RemoveIndex(m.reduceJob, 0)
 		m.reducePending = append(m.reducePending, reply.File)
 		reply.Id = indexOf(reply.File, m.files)
+		reply.UUID = m.generateUUID()
 	} else if reply.Type == "None" {
 		//potential check here
 	} else if reply.Type == "Wait" {
@@ -122,6 +128,11 @@ func (m *Master) GetMode() string {
 	} else if len(m.mapJob) != 0 && len(m.reducePending) == 0 {
 		return "Map"
 	} else if len(m.mapPending) == 0 && len(m.mapJob) == 0 && len(m.reduceJob) != 0{
+		if !m.flag {
+			m.printStatus("completed map:")
+			m.flag = true
+		}
+
 		return "Reduce"
 	} else if len(m.mapJob) == 0 && len(m.mapPending) != 0 {
 		return "Wait"
@@ -187,7 +198,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	// Your code here.
 	m.initJobs(files, nReduce)
 	m.server()
-	go m.checkPending()
+	//go m.checkPending()
 
 	return &m
 }
@@ -201,4 +212,23 @@ func (m *Master) initJobs(files []string, nReduce int) {
 		m.reduceJob = append(m.reduceJob, strconv.Itoa(i))
 		i++
 	}
+	m.set = make(map[string]bool)
+}
+
+func (m *Master) generateUUID() string {
+	for true {
+		b := make([]byte, 16)
+		_, err := rand.Read(b)
+		if err != nil {
+			log.Fatal(err)
+		}
+		s := hex.EncodeToString(b)
+		if m.set[s] {
+			continue
+		} else {
+			m.set[s] = true
+			return s
+		}
+	}
+	return "Wrong UUID"
 }
