@@ -1,0 +1,1 @@
+加入checkPending函数之后map的输出会少统计一些单词（在wc test中）
