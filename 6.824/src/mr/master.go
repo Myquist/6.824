@@ -198,7 +198,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	// Your code here.
 	m.initJobs(files, nReduce)
 	m.server()
-	//go m.checkPending()
+	go m.checkPending()
 
 	return &m
 }
